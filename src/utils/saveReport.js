@@ -88,37 +88,61 @@ export const deleteReport = async (reportId) => {
 }
 
 // ─── GET TRENDS DATA ──────────────────────────────────────────────────────────
+
+// Resolve the best available date for a report:
+// Priority: reportDate (date on the printed report) → processedAt (upload date)
+const resolveReportDate = (report) => {
+  if (report.reportDate) {
+    // Try parsing the extracted date string (e.g. "15/03/2025", "15 Mar 2025")
+    const parsed = new Date(report.reportDate)
+    if (!isNaN(parsed.getTime())) {
+      return {
+        displayDate: parsed.toLocaleDateString('en-IN', {
+          day: '2-digit', month: 'short', year: '2-digit'
+        }),
+        sortKey: parsed.toISOString()
+      }
+    }
+    // Can't auto-parse (unusual format) — show as-is, sort by upload date
+    return { displayDate: report.reportDate, sortKey: report.processedAt }
+  }
+  // No reportDate extracted — fall back to upload timestamp
+  const fallback = new Date(report.processedAt)
+  return {
+    displayDate: fallback.toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: '2-digit'
+    }),
+    sortKey: report.processedAt
+  }
+}
+
 export const getTrendsData = (reports) => {
   const trends = {}
 
   reports.forEach(report => {
-    const displayDate = new Date(report.processedAt).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: '2-digit'
-    })
+    const { displayDate, sortKey } = resolveReportDate(report)
 
     Object.entries(report.parameters).forEach(([key, param]) => {
       const value = typeof param === 'object' ? param.value : param
       const label = typeof param === 'object' ? param.label : key
-      const unit = typeof param === 'object' ? param.unit : ''
+      const unit  = typeof param === 'object' ? param.unit  : ''
 
       if (!trends[key]) {
         trends[key] = { label, unit, data: [] }
       }
       trends[key].data.push({
-        date: displayDate,
-        sortKey: report.processedAt,   // ISO string for accurate sorting
+        date: displayDate,   // actual report date shown on X-axis
+        sortKey,             // ISO string for chronological sorting
         value,
         reportId: report.id
       })
     })
   })
 
-  // Sort chronologically using the ISO sortKey
+  // Sort data points chronologically by the real report date
   Object.keys(trends).forEach(key => {
     trends[key].data.sort((a, b) => new Date(a.sortKey) - new Date(b.sortKey))
   })
 
   return trends
-}
+}
