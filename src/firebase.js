@@ -29,7 +29,16 @@ export const getOrSaveFcmToken = async (userId) => {
     if (!supported) return null
 
     const messaging = getMessaging(app)
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY })
+
+    // Register the service worker explicitly so getToken() works on localhost
+    const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+      scope: '/'
+    })
+
+    const token = await getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: swReg
+    })
     if (!token) return null
 
     // Save token + reminder preference to Firestore
