@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, updateDoc } from "firebase/firestore";
+import { getFirestore, doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { getMessaging, getToken, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
@@ -45,9 +45,10 @@ export const getOrSaveFcmToken = async (userId) => {
       return null
     }
 
-    // Save token + reminder preference to Firestore
+    // Use arrayUnion so multiple devices (PC + phone) all get notifications
+    // without overwriting each other's token
     await updateDoc(doc(db, 'users', userId), {
-      fcmToken: token,
+      fcmTokens: arrayUnion(token),
       remindersEnabled: true,
       fcmUpdatedAt: new Date().toISOString()
     })

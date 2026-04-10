@@ -101,11 +101,10 @@ const getAbnormalParams = (parameters) => {
   return result
 }
 
-// ─── SEND FCM TO ONE USER ─────────────────────────────────────────────────────
-const sendToUser = async (token, abnormalParams, firstName) => {
-  if (abnormalParams.length === 0) return
+// ─── SEND FCM TO ONE TOKEN ────────────────────────────────────────────────────
+const sendToToken = async (token, abnormalParams, firstName) => {
+  if (abnormalParams.length === 0) return 'skipped'
 
-  // Pick the most critical abnormal parameter
   const param = abnormalParams[0]
   const tip = getTodaysTip(param.key)
   const arrow = param.type === 'high' ? '⬆' : '⬇'
@@ -125,11 +124,8 @@ const sendToUser = async (token, abnormalParams, firstName) => {
         requireInteraction: false,
         click_action: 'https://medilens-ai.vercel.app/dashboard',
       },
-      fcmOptions: {
-        link: 'https://medilens-ai.vercel.app/dashboard',
-      },
+      fcmOptions: { link: 'https://medilens-ai.vercel.app/dashboard' },
     },
-    // Also send 2nd and 3rd reminders with stagger (uses data messages)
     data: {
       type: 'health-reminder',
       paramKey: param.key,
@@ -141,15 +137,15 @@ const sendToUser = async (token, abnormalParams, firstName) => {
 
   try {
     const response = await messaging.send(message)
-    console.log(`✅ Sent to ${firstName || 'user'} (${param.label}):`, response)
-    return true
+    console.log(`  ✅ Token ...${token.slice(-8)} → ${firstName} (${param.label}):`, response)
+    return 'ok'
   } catch (err) {
     if (err.code === 'messaging/registration-token-not-registered') {
-      console.warn(`⚠️ Stale FCM token for user — removing from Firestore.`)
+      console.warn(`  ⚠️ Stale token ...${token.slice(-8)} — will remove.`)
       return 'stale'
     }
-    console.error(`❌ Failed to send to ${firstName}:`, err.message)
-    return false
+    console.error(`  ❌ Token ...${token.slice(-8)} failed:`, err.message)
+    return 'error'
   }
 }
 
@@ -157,7 +153,6 @@ const sendToUser = async (token, abnormalParams, firstName) => {
 async function sendDailyReminders() {
   console.log(`\n🔔 MediLens Daily Reminder Job — ${new Date().toISOString()}\n`)
 
-  // Get all users with FCM tokens who have reminders enabled
   const usersSnap = await db.collection('users')
     .where('remindersEnabled', '==', true)
     .get()
@@ -169,14 +164,24 @@ async function sendDailyReminders() {
 
   console.log(`Found ${usersSnap.size} users with reminders enabled.\n`)
 
-  let sent = 0, failed = 0, skipped = 0, stale = []
+  let sent = 0, failed = 0, skipped = 0
 
   for (const userDoc of usersSnap.docs) {
-    const userData = userDoc.data()
-    const token     = userData.fcmToken
+    const userData  = userDoc.data()
     const firstName = userData.name?.split(' ')[0] || 'User'
 
-    if (!token) { skipped++; continue }
+    // Support both new fcmTokens[] array and legacy single fcmToken field
+    const tokens = Array.isArray(userData.fcmTokens) && userData.fcmTokens.length > 0
+      ? userData.fcmTokens
+      : userData.fcmToken
+        ? [userData.fcmToken]
+        : []
+
+    if (tokens.length === 0) {
+      console.log(`⚪ ${firstName} — no FCM token on any device, skipping.`)
+      skipped++
+      continue
+    }
 
     // Get their latest report
     const reportsSnap = await db.collection('reports')
@@ -185,9 +190,13 @@ async function sendDailyReminders() {
       .limit(1)
       .get()
 
-    if (reportsSnap.empty) { skipped++; continue }
+    if (reportsSnap.empty) {
+      console.log(`⚪ ${firstName} — no reports found, skipping.`)
+      skipped++
+      continue
+    }
 
-    const report = reportsSnap.docs[0].data()
+    const report   = reportsSnap.docs[0].data()
     const abnormal = getAbnormalParams(report.parameters || {})
 
     if (abnormal.length === 0) {
@@ -196,23 +205,21 @@ async function sendDailyReminders() {
       continue
     }
 
-    const result = await sendToUser(token, abnormal, firstName)
+    console.log(`\n👤 ${firstName} — ${tokens.length} device(s), ${abnormal.length} abnormal param(s)`)
 
-    if (result === true)      sent++
-    else if (result === false) failed++
-    else if (result === 'stale') {
-      stale.push(userDoc.id)
-      failed++
+    // Send to every registered device
+    const staleTokens = []
+    for (const token of tokens) {
+      const result = await sendToToken(token, abnormal, firstName)
+      if (result === 'ok')    sent++
+      if (result === 'error') failed++
+      if (result === 'stale') { staleTokens.push(token); failed++ }
     }
-  }
 
-  // Clean up stale tokens
-  if (stale.length > 0) {
-    console.log(`\nCleaning ${stale.length} stale tokens...`)
-    for (const uid of stale) {
-      await db.collection('users').doc(uid).update({
-        fcmToken: admin.firestore.FieldValue.delete(),
-        remindersEnabled: false,
+    // Remove stale tokens from Firestore array
+    if (staleTokens.length > 0) {
+      await db.collection('users').doc(userDoc.id).update({
+        fcmTokens: admin.firestore.FieldValue.arrayRemove(...staleTokens)
       }).catch(() => {})
     }
   }
