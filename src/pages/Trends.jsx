@@ -119,7 +119,7 @@ export default function Trends({ user }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mx-auto mb-3" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-violet-600 mx-auto mb-3" />
           <p className="text-gray-500">Loading your trends...</p>
         </div>
       </div>
@@ -128,7 +128,7 @@ export default function Trends({ user }) {
 
   if (reports.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-violet-50 to-purple-50 p-4">
         <div className="max-w-2xl mx-auto pt-6">
           <div className="flex items-center gap-3 mb-8">
             <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-white rounded-xl">
@@ -137,8 +137,8 @@ export default function Trends({ user }) {
             <h1 className="text-2xl font-bold text-gray-800">Health Trends</h1>
           </div>
           <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
-            <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Activity className="w-10 h-10 text-indigo-300" />
+            <div className="w-20 h-20 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Activity className="w-10 h-10 text-violet-300" />
             </div>
             <p className="font-semibold text-gray-600 mb-2">No data yet</p>
             <p className="text-gray-400 text-sm mb-6">
@@ -146,7 +146,7 @@ export default function Trends({ user }) {
             </p>
             <button
               onClick={() => navigate('/upload')}
-              className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700"
+              className="bg-violet-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-violet-700"
             >
               Upload Report
             </button>
@@ -167,7 +167,7 @@ export default function Trends({ user }) {
     : 'normal'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-violet-50 to-purple-50 p-4">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
@@ -195,7 +195,7 @@ export default function Trends({ user }) {
                   onClick={() => setSelectedParam(key)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                     selectedParam === key
-                      ? 'bg-indigo-600 text-white shadow-md'
+                      ? 'bg-violet-600 text-white shadow-md'
                       : st === 'high' || st === 'low'
                         ? 'bg-red-50 text-red-600 border border-red-200'
                         : 'bg-white text-gray-600 border border-gray-200'
@@ -333,7 +333,7 @@ export default function Trends({ user }) {
                   key={key}
                   onClick={() => setSelectedParam(key)}
                   className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
-                    selectedParam === key ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50'
+                    selectedParam === key ? 'bg-violet-50 border border-violet-200' : 'hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center gap-2">

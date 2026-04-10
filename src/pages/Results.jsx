@@ -1,67 +1,17 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { CheckCircle, ArrowLeft, RefreshCw, Save, FileText, Eye } from 'lucide-react'
+import { CheckCircle, ArrowLeft, RefreshCw, Save, Eye, Stethoscope } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { saveReport } from '../utils/saveReport'
-
-const NORMAL_RANGES = {
-  hemoglobin:    { min: 12,      max: 17,      unit: 'g/dL',       label: 'Hemoglobin' },
-  wbc:           { min: 4000,    max: 10000,   unit: 'cells/µL',   label: 'WBC / Total Count' },
-  rbc:           { min: 3.8,     max: 5.5,     unit: 'million/µL', label: 'RBC Count' },
-  pcv:           { min: 36,      max: 46,      unit: '%',          label: 'PCV / Hematocrit' },
-  mcv:           { min: 83,      max: 101,     unit: 'fL',         label: 'MCV' },
-  mch:           { min: 27,      max: 32,      unit: 'pg',         label: 'MCH' },
-  mchc:          { min: 31.5,    max: 34.5,    unit: 'g/dL',       label: 'MCHC' },
-  platelets:     { min: 150000,  max: 450000,  unit: 'cells/µL',   label: 'Platelet Count' },
-  rdw:           { min: 11.3,    max: 14.7,    unit: '%',          label: 'RDW-CV' },
-  neutrophils:   { min: 40,      max: 75,      unit: '%',          label: 'Neutrophils' },
-  lymphocytes:   { min: 20,      max: 45,      unit: '%',          label: 'Lymphocytes' },
-  eosinophils:   { min: 1,       max: 6,       unit: '%',          label: 'Eosinophils' },
-  monocytes:     { min: 2,       max: 10,      unit: '%',          label: 'Monocytes' },
-  basophils:     { min: 0,       max: 2,       unit: '%',          label: 'Basophils' },
-  aec:           { min: 20,      max: 500,     unit: 'cells/µL',   label: 'Abs. Eosinophil Count' },
-  alc:           { min: 1000,    max: 3000,    unit: 'cells/µL',   label: 'Abs. Lymphocyte Count' },
-  anc:           { min: 2000,    max: 7000,    unit: 'cells/µL',   label: 'Abs. Neutrophil Count' },
-  glucose:       { min: 70,      max: 100,     unit: 'mg/dL',      label: 'Fasting Glucose' },
-  ppGlucose:     { min: 70,      max: 140,     unit: 'mg/dL',      label: 'PP Glucose' },
-  hba1c:         { min: 4,       max: 5.7,     unit: '%',          label: 'HbA1c' },
-  cholesterol:   { min: 0,       max: 200,     unit: 'mg/dL',      label: 'Total Cholesterol' },
-  hdl:           { min: 40,      max: 60,      unit: 'mg/dL',      label: 'HDL Cholesterol' },
-  ldl:           { min: 0,       max: 130,     unit: 'mg/dL',      label: 'LDL Cholesterol' },
-  triglycerides: { min: 0,       max: 150,     unit: 'mg/dL',      label: 'Triglycerides' },
-  creatinine:    { min: 0.6,     max: 1.2,     unit: 'mg/dL',      label: 'Creatinine' },
-  uricAcid:      { min: 3.5,     max: 7.2,     unit: 'mg/dL',      label: 'Uric Acid' },
-  bilirubin:     { min: 0.2,     max: 1.2,     unit: 'mg/dL',      label: 'Total Bilirubin' },
-  sgpt:          { min: 7,       max: 40,      unit: 'U/L',        label: 'SGPT (ALT)' },
-  sgot:          { min: 10,      max: 40,      unit: 'U/L',        label: 'SGOT (AST)' },
-  sodium:        { min: 136,     max: 145,     unit: 'mEq/L',      label: 'Sodium' },
-  potassium:     { min: 3.5,     max: 5.1,     unit: 'mEq/L',      label: 'Potassium' },
-  calcium:       { min: 8.5,     max: 10.5,    unit: 'mg/dL',      label: 'Calcium' },
-  tsh:           { min: 0.4,     max: 4.0,     unit: 'µIU/mL',     label: 'TSH' },
-  t3:            { min: 0.8,     max: 2.0,     unit: 'ng/mL',      label: 'T3 (Total)' },
-  t4:            { min: 5.1,     max: 14.1,    unit: 'µg/dL',      label: 'T4 (Total)' },
-  vitaminD:      { min: 20,      max: 100,     unit: 'ng/mL',      label: 'Vitamin D' },
-  vitaminB12:    { min: 200,     max: 900,     unit: 'pg/mL',      label: 'Vitamin B12' },
-  ferritin:      { min: 12,      max: 150,     unit: 'ng/mL',      label: 'Ferritin' },
-  iron:          { min: 60,      max: 170,     unit: 'µg/dL',      label: 'Serum Iron' },
-  esr:           { min: 0,       max: 20,      unit: 'mm/hr',      label: 'ESR' },
-  crp:           { min: 0,       max: 5,       unit: 'mg/L',       label: 'CRP' },
-  antiTpo: { min: 0, max: 34, unit: 'IU/mL', label: 'Anti TPO Antibody' },
-}
-
-const getStatus = (key, value) => {
-  const range = NORMAL_RANGES[key]
-  if (!range) return { status: 'Recorded', color: 'gray' }
-  if (value < range.min) return { status: 'Low', color: 'blue' }
-  if (value > range.max) return { status: 'High', color: 'red' }
-  return { status: 'Normal', color: 'green' }
-}
+import { getParameterStatus, KNOWN_RANGES } from '../utils/enrichParameters'
+import { collection, addDoc, getDocs, query, where, doc, getDoc } from 'firebase/firestore'
+import { db } from '../firebase'
 
 const statusColors = {
-  green: { bg: 'bg-green-50', border: 'border-green-200', badge: 'bg-green-100 text-green-700', text: 'text-green-700' },
-  red:   { bg: 'bg-red-50',   border: 'border-red-200',   badge: 'bg-red-100 text-red-700',     text: 'text-red-700'   },
-  blue:  { bg: 'bg-blue-50',  border: 'border-blue-200',  badge: 'bg-blue-100 text-blue-700',   text: 'text-blue-700'  },
-  gray:  { bg: 'bg-gray-50',  border: 'border-gray-200',  badge: 'bg-gray-100 text-gray-600',   text: 'text-gray-600'  },
+  green: { bg: 'bg-green-50', border: 'border-green-100', badge: 'bg-green-100 text-green-700', text: 'text-green-700' },
+  red:   { bg: 'bg-red-50',   border: 'border-red-100',   badge: 'bg-red-100 text-red-700',     text: 'text-red-700'   },
+  blue:  { bg: 'bg-blue-50',  border: 'border-blue-100',  badge: 'bg-blue-100 text-blue-700',   text: 'text-blue-700'  },
+  gray:  { bg: 'bg-gray-50',  border: 'border-gray-100',  badge: 'bg-gray-100 text-gray-500',   text: 'text-gray-600'  },
 }
 
 export default function Results({ user }) {
@@ -69,22 +19,25 @@ export default function Results({ user }) {
   const navigate = useNavigate()
   const reportData = location.state?.reportData
   const originalFile = location.state?.originalFile || null
+
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [expandedInsight, setExpandedInsight] = useState(null)
+  const [requestingReview, setRequestingReview] = useState(false)
+  const [reviewRequested, setReviewRequested] = useState(false)
 
-  // Create local preview URL from file object (works before saving)
   const localFileURL = originalFile ? URL.createObjectURL(originalFile) : null
-  const isPDF = originalFile?.type === 'application/pdf'
   const isTooBig = originalFile && originalFile.size >= 900 * 1024
 
   if (!reportData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="text-center">
-          <p className="text-gray-500 text-lg mb-4">No report data found.</p>
+          <p className="text-2xl mb-2">📋</p>
+          <p className="text-gray-500 mb-4">No report data found</p>
           <button
             onClick={() => navigate('/upload')}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold"
+            className="bg-violet-600 text-white px-6 py-3 rounded-2xl font-semibold"
           >
             Upload a Report
           </button>
@@ -99,7 +52,8 @@ export default function Results({ user }) {
   const abnormalCount = paramKeys.filter(k => {
     const p = parameters[k]
     const val = typeof p === 'object' ? p.value : p
-    const { status } = getStatus(k, val)
+    const rangeInfo = typeof p === 'object' ? p.rangeInfo : null
+    const { status } = getParameterStatus(k, val, rangeInfo)
     return status === 'High' || status === 'Low'
   }).length
 
@@ -109,12 +63,11 @@ export default function Results({ user }) {
       const result = await saveReport(user.uid, reportData, originalFile)
       if (result.success) {
         setSaved(true)
-        toast.success('Report saved successfully!')
+        toast.success('Report saved!')
       } else {
         toast.error('Failed to save: ' + result.error)
       }
     } catch (err) {
-      console.error(err)
       toast.error('Failed to save report')
     } finally {
       setSaving(false)
@@ -125,7 +78,6 @@ export default function Results({ user }) {
     if (localFileURL) {
       window.open(localFileURL, '_blank')
     } else if (reportData?.fileData) {
-      // If loaded from Firestore (saved report)
       const link = document.createElement('a')
       link.href = reportData.fileData
       link.target = '_blank'
@@ -133,93 +85,199 @@ export default function Results({ user }) {
     }
   }
 
+  const handleRequestReview = async () => {
+    setRequestingReview(true)
+    try {
+      // Get available doctors
+      const doctorsSnap = await getDocs(
+        query(collection(db, 'users'), where('role', '==', 'doctor'))
+      )
+      const doctors = doctorsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+      if (doctors.length === 0) {
+        toast.error('No doctors available right now. Please try again later.')
+        setRequestingReview(false)
+        return
+      }
+
+      // Auto-assign to random available doctor
+      const doctor = doctors[Math.floor(Math.random() * doctors.length)]
+
+      // Count abnormal params
+      const abnormalCount = Object.entries(parameters).filter(([k, p]) => {
+        const val = typeof p === 'object' ? p.value : p
+        const rangeInfo = typeof p === 'object' ? p.rangeInfo : null
+        const { status } = getParameterStatus(k, val, rangeInfo)
+        return status === 'High' || status === 'Low'
+      }).length
+
+      // Get patient info
+      const userDoc = await getDoc(doc(db, 'users', user.uid))
+      const userData = userDoc.exists() ? userDoc.data() : {}
+      const firstName = userData.name?.split(' ')[0] || 'Patient'
+
+      await addDoc(collection(db, 'reviews'), {
+        patientId: user.uid,
+        patientFirstName: firstName,
+        patientAge: userData.age || null,
+        doctorId: doctor.id,
+        doctorName: doctor.name,
+        parameters,
+        reportDate: reportData.reportDate || null,
+        reportType: fileName,
+        abnormalCount,
+        status: 'pending',
+        hasUnread: true,
+        doctorNotes: '',
+        flaggedParams: [],
+        createdAt: new Date().toISOString()
+      })
+
+      setReviewRequested(true)
+      toast.success(
+        `Review sent to Dr. ${doctor.name.split(' ').slice(-1)[0]}! You'll be notified when reviewed.`
+      )
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to request review. Please try again.')
+    } finally {
+      setRequestingReview(false)
+    }
+  }
+
   const canViewOriginal = localFileURL || reportData?.fileData
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-gray-50 pb-10">
+      <div className="max-w-2xl mx-auto px-4">
 
         {/* Header */}
         <div className="flex items-center gap-3 pt-6 mb-6">
           <button
             onClick={() => navigate('/upload')}
-            className="p-2 hover:bg-white rounded-xl transition-colors"
+            className="p-2 hover:bg-white rounded-xl transition-colors border border-gray-200"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
+            <ArrowLeft className="w-4 h-4 text-gray-600" />
           </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Report Results</h1>
-            <p className="text-gray-400 text-sm truncate max-w-xs">{fileName}</p>
-            {reportDate && (
-              <p className="text-xs text-indigo-500 font-medium mt-0.5">
-                📅 Report Date: {reportDate}
-              </p>
-            )}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-gray-900">Report Results</h1>
+            <p className="text-gray-400 text-xs truncate">
+              {fileName}
+              {reportDate && (
+                <span className="text-violet-500 ml-2">· {reportDate}</span>
+              )}
+            </p>
           </div>
-        </div>
-
-        {/* Success Banner */}
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-4 flex gap-3">
-          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-700 font-medium">
-            ✅ Report analyzed successfully! Review your results below.
-          </p>
         </div>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <p className="text-2xl font-bold text-indigo-600">{paramKeys.length}</p>
-            <p className="text-xs text-gray-500 mt-1">Parameters</p>
+          <div className="bg-white rounded-2xl p-4 text-center border border-gray-100">
+            <p className="text-2xl font-bold text-violet-600">{paramKeys.length}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Found</p>
           </div>
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <p className="text-2xl font-bold text-green-600">{paramKeys.length - abnormalCount}</p>
-            <p className="text-xs text-gray-500 mt-1">Normal</p>
+          <div className="bg-white rounded-2xl p-4 text-center border border-gray-100">
+            <p className="text-2xl font-bold text-emerald-500">{paramKeys.length - abnormalCount}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Normal</p>
           </div>
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
+          <div className="bg-white rounded-2xl p-4 text-center border border-gray-100">
             <p className="text-2xl font-bold text-red-500">{abnormalCount}</p>
-            <p className="text-xs text-gray-500 mt-1">Attention</p>
+            <p className="text-xs text-gray-400 mt-0.5">Attention</p>
           </div>
         </div>
 
         {/* Parameters List */}
-        <div className="space-y-3 mb-6">
+        <div className="space-y-2.5 mb-6">
           {paramKeys.map((key) => {
             const param = parameters[key]
             const value = typeof param === 'object' ? param.value : param
-            const unit = typeof param === 'object' ? param.unit : ''
+            const unit = typeof param === 'object' ? (param.rangeInfo?.unit || param.unit) : ''
             const label = typeof param === 'object'
-              ? param.label
-              : (NORMAL_RANGES[key]?.label || key)
-            const { status, color } = getStatus(key, value)
+              ? (param.rangeInfo?.label || param.label || key)
+              : key
+            const rangeInfo = typeof param === 'object' ? param.rangeInfo : (KNOWN_RANGES[key] || null)
+            const { status, color } = getParameterStatus(key, value, rangeInfo)
             const colors = statusColors[color]
-            const range = NORMAL_RANGES[key]
+            const isExpanded = expandedInsight === key
+            const hasInsight = rangeInfo && (status === 'High' || status === 'Low')
+            const isAIGenerated = rangeInfo?.aiGenerated
 
             return (
-              <div key={key} className={`${colors.bg} border ${colors.border} rounded-2xl p-4`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm">{label}</p>
-                    <p className={`text-2xl font-bold ${colors.text} mt-1`}>
-                      {typeof value === 'number' && value > 1000
-                        ? value.toLocaleString('en-IN')
-                        : value}
-                      <span className="text-sm font-normal text-gray-400 ml-1">{unit}</span>
-                    </p>
-                    {range && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Normal: {typeof range.min === 'number' && range.min > 1000
-                          ? range.min.toLocaleString('en-IN')
-                          : range.min} – {typeof range.max === 'number' && range.max > 1000
-                          ? range.max.toLocaleString('en-IN')
-                          : range.max} {range.unit}
-                      </p>
-                    )}
+              <div
+                key={key}
+                className={`bg-white border ${colors.border} rounded-2xl overflow-hidden transition-all`}
+              >
+                <div
+                  className={`p-4 ${hasInsight ? 'cursor-pointer' : ''}`}
+                  onClick={() => hasInsight && setExpandedInsight(isExpanded ? null : key)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-gray-800 text-sm">{label}</p>
+                        {isAIGenerated && (
+                          <span className="text-xs bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded-lg">
+                            ✨ auto
+                          </span>
+                        )}
+                      </div>
+                      {rangeInfo?.description && (
+                        <p className="text-xs text-gray-400 mt-0.5">{rangeInfo.description}</p>
+                      )}
+                      <div className="flex items-baseline gap-1 mt-1.5">
+                        <p className={`text-xl font-bold ${colors.text}`}>
+                          {typeof value === 'number' && value > 1000
+                            ? value.toLocaleString('en-IN')
+                            : value}
+                        </p>
+                        <p className="text-xs text-gray-400">{unit}</p>
+                      </div>
+                      {rangeInfo && rangeInfo.min !== undefined && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Normal: {rangeInfo.min} – {rangeInfo.max} {rangeInfo.unit}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2 ml-3 flex-shrink-0">
+                      <span className={`${colors.badge} text-xs font-semibold px-2.5 py-1 rounded-full`}>
+                        {status}
+                      </span>
+                      {hasInsight && (
+                        <span className="text-xs text-gray-400">
+                          {isExpanded ? '▲' : '▼ insight'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className={`${colors.badge} text-xs font-bold px-3 py-1.5 rounded-full ml-3 flex-shrink-0`}>
-                    {status}
-                  </span>
                 </div>
+
+                {/* Expandable Insight */}
+                {hasInsight && isExpanded && (
+                  <div className={`px-4 pb-4 border-t ${colors.border}`}>
+                    <div className={`rounded-xl p-3 mt-3 ${color === 'red' ? 'bg-red-50' : 'bg-blue-50'}`}>
+                      <p className="text-xs font-semibold text-gray-700 mb-1">
+                        ⚠️ {status === 'High' ? 'Why this matters:' : 'What this means:'}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {status === 'High' ? rangeInfo.highEffect : rangeInfo.lowEffect}
+                      </p>
+                      {rangeInfo.tips && rangeInfo.tips.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-semibold text-gray-700 mb-1">💡 What to do:</p>
+                          {rangeInfo.tips.map((tip, i) => (
+                            <div key={i} className="flex items-start gap-1.5 mb-1">
+                              <span className="text-emerald-500 text-xs mt-0.5 flex-shrink-0">✓</span>
+                              <p className="text-xs text-gray-600">{tip}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-400 mt-2 italic">
+                        Always consult a qualified doctor before making health decisions.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -227,66 +285,87 @@ export default function Results({ user }) {
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-3 mb-6">
+
+          {/* Save Report */}
           {!saved ? (
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg disabled:opacity-50"
+              className="flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-4 rounded-2xl transition-all shadow-md shadow-violet-100 disabled:opacity-50"
             >
               {saving
-                ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                : <Save className="w-5 h-5" />
+                ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                : <Save className="w-4 h-4" />
               }
               {saving ? 'Saving...' : 'Save Report'}
             </button>
           ) : (
-            <div className="flex items-center justify-center gap-2 w-full bg-green-50 border border-green-200 text-green-700 font-bold py-4 rounded-2xl">
-              <CheckCircle className="w-5 h-5" />
-              Report Saved!
+            <div className="flex items-center justify-center gap-2 w-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold py-4 rounded-2xl">
+              <CheckCircle className="w-4 h-4" />
+              Saved successfully!
             </div>
           )}
 
-          {/* View Original Report */}
+          {/* Request Doctor Review — only show after saving */}
+          {saved && !reviewRequested && (
+            <button
+              onClick={handleRequestReview}
+              disabled={requestingReview}
+              className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-2xl transition-all shadow-md disabled:opacity-50"
+            >
+              {requestingReview
+                ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                : <Stethoscope className="w-4 h-4" />
+              }
+              {requestingReview ? 'Finding a doctor...' : '👨‍⚕️ Request Doctor Review'}
+            </button>
+          )}
+
+          {reviewRequested && (
+            <div className="flex items-center justify-center gap-2 w-full bg-blue-50 border border-blue-200 text-blue-700 font-semibold py-4 rounded-2xl">
+              <Stethoscope className="w-4 h-4" />
+              Doctor Review Requested! ✅
+            </div>
+          )}
+
+          {/* View Original */}
           {canViewOriginal && (
             <button
               onClick={handleViewOriginal}
-              className="flex items-center justify-center gap-2 w-full bg-white border border-indigo-200 text-indigo-600 font-semibold py-3 rounded-2xl hover:bg-indigo-50 transition-all"
+              className="flex items-center justify-center gap-2 w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-2xl hover:bg-gray-50 transition-all"
             >
-              <Eye className="w-5 h-5" />
+              <Eye className="w-4 h-4" />
               View Original Report
             </button>
           )}
 
-          {/* File too large warning */}
           {isTooBig && (
-            <div className="flex items-center justify-center gap-2 w-full bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm py-3 rounded-2xl px-4 text-center">
-              ⚠️ File is large ({(originalFile.size / 1024).toFixed(0)}KB) — preview available now but won't be saved permanently
-            </div>
+            <p className="text-xs text-center text-amber-600 bg-amber-50 py-2 px-4 rounded-xl">
+              ⚠️ File too large to save permanently
+            </p>
           )}
 
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center justify-center gap-2 w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-2xl hover:bg-gray-50 transition-all"
-          >
-            View Dashboard
-          </button>
-
-          <button
-            onClick={() => navigate('/upload')}
-            className="flex items-center justify-center gap-2 w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-2xl hover:bg-gray-50 transition-all"
-          >
-            <RefreshCw className="w-5 h-5" />
-            Upload Another Report
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 font-medium py-3 rounded-2xl hover:bg-gray-50 transition-all text-sm"
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => navigate('/upload')}
+              className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 font-medium py-3 rounded-2xl hover:bg-gray-50 transition-all text-sm"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              New Upload
+            </button>
+          </div>
         </div>
 
-        {/* Privacy Disclaimer */}
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 text-center mb-8">
-          <p className="text-xs text-gray-400">
-            🔒 Your health data is stored securely. Values shown are for informational purposes only.
-            Always consult a qualified medical doctor in India.
-          </p>
-        </div>
+        {/* Disclaimer */}
+        <p className="text-center text-xs text-gray-400 px-4 pb-4">
+          🔒 Results are for informational purposes only. Always consult a qualified medical doctor in India.
+        </p>
 
       </div>
     </div>

@@ -5,6 +5,18 @@ import {
   deleteDoc, doc
 } from 'firebase/firestore'
 
+import OpenAI from 'openai'
+
+const openrouter = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: import.meta.env.VITE_AI_API_KEY,
+  dangerouslyAllowBrowser: true,
+  defaultHeaders: {
+    'HTTP-Referer': 'https://medilens-ai.vercel.app',
+    'X-Title': 'MediLens AI'
+  }
+})
+
 // ─── CONVERT FILE TO BASE64 ───────────────────────────────────────────────────
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {

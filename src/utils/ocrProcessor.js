@@ -280,6 +280,10 @@ const fallbackExtract = (rawText) => {
     { key: 'iron',          label: 'Serum Iron',             unit: 'µg/dL',      pattern: /serum\s*iron|\biron\b/i,                                      min: 20,     max: 300,     lookahead: 8  },
     { key: 'esr',           label: 'ESR',                    unit: 'mm/hr',      pattern: /\besr\b|erythrocyte\s*sed/i,                                 min: 0,      max: 140,     lookahead: 8  },
     { key: 'crp',           label: 'CRP',                    unit: 'mg/L',       pattern: /\bcrp\b|c[\s-]*reactive\s*protein/i,                         min: 0,      max: 300,     lookahead: 8  },
+    { key: 'vldl',        label: 'VLDL Cholesterol',   unit: 'mg/dL', pattern: /vldl\s*cholesterol|\bvldl\b/i,           min: 2,   max: 100,  lookahead: 8 },
+{ key: 'tcHdlRatio',  label: 'TC/HDL Ratio',        unit: '',      pattern: /tc\s*\/\s*hdl|tc\/hdl\s*ratio/i,         min: 1,   max: 10,   lookahead: 8 },
+{ key: 'ldlHdlRatio', label: 'LDL/HDL Ratio',       unit: '',      pattern: /ldl\s*\/\s*hdl|ldl\/hdl\s*ratio/i,       min: 0.5, max: 8,    lookahead: 8 },
+{ key: 'nonHdl',      label: 'Non-HDL Cholesterol', unit: 'mg/dL', pattern: /non\s*[-–]?\s*hdl/i,                     min: 30,  max: 300,  lookahead: 8 },
   ]
 
   // Lines to SKIP — these are not result values

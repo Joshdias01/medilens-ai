@@ -10,6 +10,7 @@ import {
   Brain, TrendingDown, Minus
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { collection, query, where, onSnapshot } from 'firebase/firestore'
 
 const NORMAL_RANGES = {
   hemoglobin:    { min: 12,      max: 17,      unit: 'g/dL',       label: 'Hemoglobin' },
@@ -270,6 +271,75 @@ const getReportStatus = (parameters) => {
   })
   return { abnormal, total }
 }
+function DoctorReviewsSection({ user }) {
+  const [reviews, setReviews] = useState([])
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'reviews'),
+      where('patientId', '==', user.uid)
+    )
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      setReviews(data)
+    })
+    return () => unsub()
+  }, [user.uid])
+
+  if (reviews.length === 0) return null
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-bold text-gray-800 flex items-center gap-2">
+          <span>👨‍⚕️</span> Doctor Reviews
+        </h2>
+      </div>
+      <div className="space-y-3">
+        {reviews.map(review => (
+          <div
+            key={review.id}
+            onClick={() => navigate(`/review/${review.id}`)}
+            className="bg-white rounded-2xl border border-gray-100 p-4 cursor-pointer hover:shadow-md transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">
+                  Dr. {review.doctorName?.split(' ').slice(-1)[0]}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[200px]">
+                  {review.reportType}
+                </p>
+                {review.status === 'completed' && review.doctorNotes && (
+                  <p className="text-xs text-emerald-600 mt-1 truncate max-w-[200px]">
+                    💬 "{review.doctorNotes.substring(0, 50)}..."
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  review.status === 'completed'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {review.status === 'completed' ? '✅ Reviewed' : '⏳ Pending'}
+                </span>
+                {review.hasUnread && review.status === 'completed' && (
+                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                    New!
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard({ user }) {
   const [reports, setReports] = useState([])
@@ -351,7 +421,7 @@ export default function Dashboard({ user }) {
         </div>
 
         {/* Profile Card */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-5 mb-6 text-white shadow-lg">
+        <div className="bg-gradient-to-r from-violet-600 to-indigo-500 rounded-2xl p-5 mb-6 text-white shadow-lg">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
               <User className="w-7 h-7 text-white" />
@@ -386,8 +456,8 @@ export default function Dashboard({ user }) {
             onClick={() => navigate('/upload')}
             className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:shadow-md transition-all active:scale-95"
           >
-            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Upload className="w-5 h-5 text-indigo-600" />
+            <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Upload className="w-5 h-5 text-violet-600" />
             </div>
             <div className="text-left">
               <p className="font-semibold text-gray-800 text-sm">Upload</p>
@@ -407,6 +477,9 @@ export default function Dashboard({ user }) {
             </div>
           </button>
         </div>
+
+{/* My Doctor Reviews */}
+<DoctorReviewsSection user={user} />
 
         {/* Health Insights */}
         {insights.length > 0 && (
@@ -524,7 +597,7 @@ export default function Dashboard({ user }) {
               <p className="text-gray-400 text-sm mb-4">Upload your first medical report to get started</p>
               <button
                 onClick={() => navigate('/upload')}
-                className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors"
+                className="bg-violet-600 text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors"
               >
                 Upload Now
               </button>

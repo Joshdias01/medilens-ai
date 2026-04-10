@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Upload as UploadIcon, FileText, Image, X, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { processReport } from '../utils/ocrProcessor'
+import { enrichParameters } from '../utils/enrichParameters'
 
 export default function Upload({ user }) {
   const [file, setFile] = useState(null)
@@ -44,6 +45,7 @@ export default function Upload({ user }) {
       toast.error('Please select a file first!')
       return
     }
+
     setProcessing(true)
     setVerificationWarning(null)
     setPendingResult(null)
@@ -63,7 +65,7 @@ export default function Upload({ user }) {
       if (result.success) {
         const ownership = result.data.ownership
 
-        // If verification fails — show warning, pause navigation
+        // If verification fails — show warning
         if (ownership && !ownership.verified && ownership.warning) {
           setVerificationWarning(ownership.warning)
           setPendingResult(result)
@@ -71,7 +73,12 @@ export default function Upload({ user }) {
           return
         }
 
-        toast.success('Report processed successfully!')
+        // Enrich unknown parameters with AI
+        setProgress('🔍 Looking up parameter information...')
+        const enriched = await enrichParameters(result.data.parameters, setProgress)
+        result.data.parameters = enriched
+
+        toast.success('Report analyzed successfully!')
         navigate('/results', {
           state: { reportData: result.data, originalFile: file }
         })
@@ -87,13 +94,30 @@ export default function Upload({ user }) {
     }
   }
 
-  // User confirms it's their report despite mismatch
-  const handleProceedAnyway = () => {
-    if (pendingResult) {
+  const handleProceedAnyway = async () => {
+    if (!pendingResult) return
+
+    setProcessing(true)
+    setVerificationWarning(null)
+
+    try {
+      setProgress('🔍 Looking up parameter information...')
+      const enriched = await enrichParameters(
+        pendingResult.data.parameters,
+        setProgress
+      )
+      pendingResult.data.parameters = enriched
+
       toast.success('Report processed!')
       navigate('/results', {
         state: { reportData: pendingResult.data, originalFile: file }
       })
+    } catch (error) {
+      console.error(error)
+      toast.error('Something went wrong. Please try again.')
+    } finally {
+      setProcessing(false)
+      setProgress('')
     }
   }
 
@@ -110,22 +134,24 @@ export default function Upload({ user }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
+    <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
         <div className="text-center mb-8 pt-6">
-          <h1 className="text-3xl font-bold text-gray-800">Upload Lab Report</h1>
-          <p className="text-gray-500 mt-2">Upload your medical report to extract key health parameters</p>
+          <h1 className="text-2xl font-bold text-gray-900">Upload Lab Report</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Upload any medical report — we'll extract and analyze your results
+          </p>
         </div>
 
         {/* Privacy Notice */}
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 flex gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4 mb-6 flex gap-3">
+          <span className="text-lg flex-shrink-0">🔒</span>
           <div>
-            <p className="text-sm font-semibold text-blue-700">🔒 Privacy Protected</p>
-            <p className="text-xs text-blue-600 mt-1">
-              Only numerical health values are analyzed. No personal data or full reports are shared externally.
+            <p className="text-sm font-semibold text-violet-700">Your data stays private</p>
+            <p className="text-xs text-violet-500 mt-0.5">
+              Only numerical values are analyzed. No personal info or full reports are shared externally.
             </p>
           </div>
         </div>
@@ -134,11 +160,11 @@ export default function Upload({ user }) {
         {verificationWarning && (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
             <div className="flex items-start gap-3 mb-4">
-              <ShieldAlert className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+              <ShieldAlert className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-red-700 text-sm">⚠️ Report Verification Failed</p>
                 <p className="text-sm text-red-600 mt-1">{verificationWarning}</p>
-                <p className="text-xs text-red-500 mt-2">
+                <p className="text-xs text-red-400 mt-2">
                   Please make sure you are uploading your own medical report.
                 </p>
               </div>
@@ -152,9 +178,10 @@ export default function Upload({ user }) {
               </button>
               <button
                 onClick={handleProceedAnyway}
-                className="flex-1 bg-white border border-red-200 text-red-500 font-semibold py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors"
+                disabled={processing}
+                className="flex-1 bg-white border border-red-200 text-red-500 font-semibold py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors disabled:opacity-50"
               >
-                It's My Report →
+                {processing ? 'Processing...' : "It's My Report →"}
               </button>
             </div>
           </div>
@@ -166,31 +193,31 @@ export default function Upload({ user }) {
             {...getRootProps()}
             className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${
               isDragActive
-                ? 'border-indigo-500 bg-indigo-50 scale-105'
-                : 'border-gray-300 bg-white hover:border-indigo-400 hover:bg-indigo-50'
+                ? 'border-violet-500 bg-violet-50 scale-105'
+                : 'border-gray-200 bg-white hover:border-violet-400 hover:bg-violet-50'
             }`}
           >
             <input {...getInputProps()} />
             <div className="flex flex-col items-center gap-4">
-              <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center">
-                <UploadIcon className="w-10 h-10 text-indigo-500" />
+              <div className="w-16 h-16 bg-violet-100 rounded-2xl flex items-center justify-center">
+                <UploadIcon className="w-8 h-8 text-violet-500" />
               </div>
               {isDragActive ? (
-                <p className="text-indigo-600 font-semibold text-lg">Drop your file here!</p>
+                <p className="text-violet-600 font-semibold">Drop your file here!</p>
               ) : (
                 <>
                   <div>
-                    <p className="text-gray-700 font-semibold text-lg">Drag & drop your report here</p>
+                    <p className="text-gray-700 font-semibold">Drag & drop your report here</p>
                     <p className="text-gray-400 text-sm mt-1">or tap to browse files</p>
                   </div>
-                  <div className="flex gap-3 mt-2">
-                    <span className="flex items-center gap-1 bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded-full">
+                  <div className="flex gap-2 flex-wrap justify-center">
+                    <span className="flex items-center gap-1 bg-gray-100 text-gray-500 text-xs px-3 py-1.5 rounded-full">
                       <Image className="w-3 h-3" /> JPG, PNG
                     </span>
-                    <span className="flex items-center gap-1 bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded-full">
+                    <span className="flex items-center gap-1 bg-gray-100 text-gray-500 text-xs px-3 py-1.5 rounded-full">
                       <FileText className="w-3 h-3" /> PDF
                     </span>
-                    <span className="flex items-center gap-1 bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded-full">
+                    <span className="flex items-center gap-1 bg-gray-100 text-gray-500 text-xs px-3 py-1.5 rounded-full">
                       Max 10MB
                     </span>
                   </div>
@@ -199,36 +226,43 @@ export default function Upload({ user }) {
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-md p-6">
+          /* File Preview */
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
                   {file.type === 'application/pdf'
-                    ? <FileText className="w-7 h-7 text-indigo-600" />
-                    : <Image className="w-7 h-7 text-indigo-600" />
+                    ? <FileText className="w-6 h-6 text-violet-600" />
+                    : <Image className="w-6 h-6 text-violet-600" />
                   }
                 </div>
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-800 truncate max-w-xs">{file.name}</p>
-                  <p className="text-sm text-gray-400">{formatFileSize(file.size)}</p>
-                  <span className="inline-block bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full mt-1">
-                    ✓ Ready to process
+                  <p className="font-semibold text-gray-800 text-sm truncate max-w-[200px]">
+                    {file.name}
+                  </p>
+                  <p className="text-xs text-gray-400">{formatFileSize(file.size)}</p>
+                  <span className="inline-block bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full mt-1">
+                    ✓ Ready
                   </span>
                 </div>
               </div>
               {!processing && (
-                <button onClick={removeFile} className="p-2 hover:bg-red-50 rounded-xl transition-colors">
-                  <X className="w-5 h-5 text-red-400" />
+                <button
+                  onClick={removeFile}
+                  className="p-2 hover:bg-red-50 rounded-xl transition-colors"
+                >
+                  <X className="w-4 h-4 text-red-400" />
                 </button>
               )}
             </div>
 
+            {/* Image preview */}
             {file.type !== 'application/pdf' && (
               <div className="mt-4 rounded-xl overflow-hidden border border-gray-100">
                 <img
                   src={URL.createObjectURL(file)}
-                  alt="Report preview"
-                  className="w-full max-h-48 object-contain bg-gray-50"
+                  alt="Preview"
+                  className="w-full max-h-44 object-contain bg-gray-50"
                 />
               </div>
             )}
@@ -237,16 +271,16 @@ export default function Upload({ user }) {
 
         {/* Progress */}
         {processing && (
-          <div className="mt-6 bg-white rounded-2xl shadow-md p-6">
+          <div className="mt-4 bg-white rounded-2xl border border-gray-100 p-5">
             <div className="flex items-center gap-4">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-indigo-600 flex-shrink-0" />
+              <div className="animate-spin rounded-full h-9 w-9 border-b-3 border-violet-600 flex-shrink-0" />
               <div>
-                <p className="font-semibold text-gray-800">Processing your report...</p>
-                <p className="text-sm text-indigo-600 mt-1">{progress}</p>
+                <p className="font-semibold text-gray-800 text-sm">Analyzing your report...</p>
+                <p className="text-xs text-violet-500 mt-0.5">{progress}</p>
               </div>
             </div>
-            <div className="mt-4 bg-gray-100 rounded-full h-2">
-              <div className="bg-indigo-600 h-2 rounded-full animate-pulse w-3/4" />
+            <div className="mt-4 bg-gray-100 rounded-full h-1.5">
+              <div className="bg-violet-600 h-1.5 rounded-full animate-pulse w-2/3" />
             </div>
           </div>
         )}
@@ -255,33 +289,28 @@ export default function Upload({ user }) {
         {file && !processing && !verificationWarning && (
           <button
             onClick={handleProcess}
-            className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl text-lg flex items-center justify-center gap-3"
+            className="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-4 rounded-2xl transition-all shadow-lg shadow-violet-200 flex items-center justify-center gap-2"
           >
-            <CheckCircle className="w-6 h-6" />
+            <CheckCircle className="w-5 h-5" />
             Analyze Report
           </button>
         )}
 
         {/* Tips */}
-        <div className="mt-8 bg-white rounded-2xl shadow-sm p-6">
-          <h3 className="font-semibold text-gray-700 mb-3">📋 Tips for best results:</h3>
-          <ul className="space-y-2 text-sm text-gray-500">
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 font-bold mt-0.5">✓</span>
-              Make sure the report is clearly visible and not blurry
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 font-bold mt-0.5">✓</span>
-              PDF uploads give the most accurate results
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 font-bold mt-0.5">✓</span>
-              Upload only your own medical reports
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 font-bold mt-0.5">✓</span>
-              Report date will be automatically detected from the document
-            </li>
+        <div className="mt-6 bg-white rounded-2xl border border-gray-100 p-5">
+          <p className="font-semibold text-gray-700 text-sm mb-3">📋 Tips for best results</p>
+          <ul className="space-y-2">
+            {[
+              'PDF uploads give the most accurate results',
+              'Make sure the report text is clearly visible',
+              'Works with CBC, Lipid, Thyroid, Kidney, Liver reports and more',
+              'Upload only your own medical reports',
+            ].map((tip, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
+                <span className="text-emerald-500 font-bold mt-0.5 flex-shrink-0">✓</span>
+                {tip}
+              </li>
+            ))}
           </ul>
         </div>
 
