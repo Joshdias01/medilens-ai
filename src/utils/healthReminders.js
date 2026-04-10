@@ -274,47 +274,56 @@ export const markReminderSentToday = () =>
   localStorage.setItem(STORAGE_KEY_DATE, new Date().toISOString())
 
 // ─── FIRE A BROWSER NOTIFICATION ─────────────────────────────────────────────
-export const fireHealthReminder = (abnormalParam, isSilent = false) => {
+// Uses Service Worker showNotification() — works on BOTH desktop and mobile Chrome.
+// new Notification() works only on desktop; mobile Chrome requires the SW API.
+export const fireHealthReminder = async (abnormalParam, isSilent = false) => {
   if (Notification.permission !== 'granted') return false
 
-  const { key, label, type, value } = abnormalParam
-  const tip = getTodaysTip(key)
+  const { key, label, type } = abnormalParam
+  const tip   = getTodaysTip(key)
   const arrow = type === 'high' ? '⬆' : '⬇'
   const emoji = type === 'high' ? '⚠️' : '💙'
 
-  const notification = new Notification(
-    `${emoji} ${label} is ${type === 'high' ? 'High' : 'Low'} ${arrow}`,
-    {
-      body: `Today's action: ${tip}`,
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
-      tag: `medilens-${key}`,       // prevents duplicate stacking per param
-      requireInteraction: false,
-      silent: isSilent,
-    }
-  )
-
-  notification.onclick = () => {
-    window.focus()
-    notification.close()
+  const title   = `${emoji} ${label} is ${type === 'high' ? 'High' : 'Low'} ${arrow}`
+  const options = {
+    body:              `Today's action: ${tip}`,
+    icon:              '/favicon.ico',
+    badge:             '/favicon.ico',
+    tag:               `medilens-${key}`,
+    requireInteraction: false,
+    silent:            isSilent,
   }
 
-  return true
+  try {
+    if ('serviceWorker' in navigator) {
+      // Works on desktop + mobile Chrome
+      const reg = await navigator.serviceWorker.ready
+      await reg.showNotification(title, options)
+    } else {
+      // Fallback for browsers without service worker support
+      new Notification(title, options)
+    }
+    return true
+  } catch (err) {
+    console.warn('Notification show error:', err)
+    return false
+  }
 }
 
 // ─── FIRE ALL REMINDERS (up to 3 most critical) ───────────────────────────────
-export const fireDailyReminders = (parameters) => {
+export const fireDailyReminders = async (parameters) => {
   if (Notification.permission !== 'granted') return 0
   if (!remindersEnabled()) return 0
 
   const abnormal = getAbnormalForReminder(parameters)
   if (abnormal.length === 0) return 0
 
-  // Prioritise: fire up to 3 with 1.5s gap so OS doesn't group them
+  // Fire up to 3, staggered so OS doesn't collapse them into a group
   const toFire = abnormal.slice(0, 3)
-  toFire.forEach((param, i) => {
-    setTimeout(() => fireHealthReminder(param), i * 1500)
-  })
+  for (let i = 0; i < toFire.length; i++) {
+    await new Promise(resolve => setTimeout(resolve, i * 1500))
+    await fireHealthReminder(toFire[i])
+  }
 
   markReminderSentToday()
   return toFire.length

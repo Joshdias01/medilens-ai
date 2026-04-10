@@ -411,7 +411,7 @@ export default function Dashboard({ user }) {
   }
 
   // Fire a test notification immediately
-  const handleTestReminder = () => {
+  const handleTestReminder = async () => {
     const latestRep = reports[0]
     if (!latestRep) { toast.error('Upload a report first to test reminders.'); return }
     const abnormal = getAbnormalForReminder(latestRep.parameters)
@@ -419,7 +419,7 @@ export default function Dashboard({ user }) {
       toast('All your parameters look normal. Great job! ✅')
       return
     }
-    const fired = fireHealthReminder(abnormal[0], false)
+    const fired = await fireHealthReminder(abnormal[0], false)
     if (fired) toast.success('Test reminder sent! Check your notifications. 🔔')
     else toast.error('Could not send — make sure notifications are enabled.')
   }
