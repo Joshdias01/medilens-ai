@@ -1,18 +1,30 @@
 import { db } from '../firebase'
 import {
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  deleteDoc,
-  doc
+  collection, addDoc, query,
+  where, orderBy, getDocs,
+  deleteDoc, doc
 } from 'firebase/firestore'
 
-// ─── SAVE REPORT TO FIRESTORE ─────────────────────────────────────────────────
-export const saveReport = async (userId, reportData) => {
+// ─── CONVERT FILE TO BASE64 ───────────────────────────────────────────────────
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result) // includes data:mime;base64,...
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// ─── SAVE REPORT ──────────────────────────────────────────────────────────────
+export const saveReport = async (userId, reportData, file = null) => {
   try {
+    let fileData = null
+
+    // Only store file if it's under 900KB (Firestore 1MB doc limit)
+    if (file && file.size < 900 * 1024) {
+      fileData = await fileToBase64(file)
+    }
+
     const reportsRef = collection(db, 'reports')
     const docRef = await addDoc(reportsRef, {
       userId,
@@ -20,8 +32,10 @@ export const saveReport = async (userId, reportData) => {
       fileType: reportData.fileType,
       parameters: reportData.parameters,
       processedAt: reportData.processedAt,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      fileData: fileData || null
     })
+
     return { success: true, id: docRef.id }
   } catch (error) {
     console.error('Save error:', error)
@@ -29,21 +43,19 @@ export const saveReport = async (userId, reportData) => {
   }
 }
 
-// ─── GET ALL REPORTS FOR USER ─────────────────────────────────────────────────
+// ─── GET ALL USER REPORTS ─────────────────────────────────────────────────────
 export const getUserReports = async (userId) => {
   try {
     const reportsRef = collection(db, 'reports')
-    // Simplified query - no orderBy to avoid index requirement
     const q = query(
       reportsRef,
       where('userId', '==', userId)
     )
     const snapshot = await getDocs(q)
-    const reports = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
+    const reports = snapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data()
     }))
-    // Sort on client side instead
     reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     return reports
   } catch (error) {
@@ -63,7 +75,6 @@ export const deleteReport = async (reportId) => {
 }
 
 // ─── GET TRENDS DATA ──────────────────────────────────────────────────────────
-// Returns time-series data for each parameter
 export const getTrendsData = (reports) => {
   const trends = {}
 
@@ -82,11 +93,14 @@ export const getTrendsData = (reports) => {
       if (!trends[key]) {
         trends[key] = { label, unit, data: [] }
       }
-      trends[key].data.push({ date, value, reportId: report.id })
+      trends[key].data.push({
+        date,
+        value,
+        reportId: report.id
+      })
     })
   })
 
-  // Sort each parameter's data by date
   Object.keys(trends).forEach(key => {
     trends[key].data.sort((a, b) => new Date(a.date) - new Date(b.date))
   })

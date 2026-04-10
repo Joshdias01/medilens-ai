@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useNavigate } from 'react-router-dom'
-import { Upload as UploadIcon, FileText, Image, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { Upload as UploadIcon, FileText, Image, X, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { processReport } from '../utils/ocrProcessor'
 
@@ -9,6 +9,8 @@ export default function Upload({ user }) {
   const [file, setFile] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [progress, setProgress] = useState('')
+  const [verificationWarning, setVerificationWarning] = useState(null)
+  const [pendingResult, setPendingResult] = useState(null)
   const navigate = useNavigate()
 
   const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
@@ -22,6 +24,8 @@ export default function Upload({ user }) {
       return
     }
     setFile(selectedFile)
+    setVerificationWarning(null)
+    setPendingResult(null)
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -41,16 +45,36 @@ export default function Upload({ user }) {
       return
     }
     setProcessing(true)
+    setVerificationWarning(null)
+    setPendingResult(null)
+
     try {
       setProgress('📄 Reading your report...')
       await new Promise(r => setTimeout(r, 500))
 
-      setProgress('🔍 Extracting text with OCR...')
-      const result = await processReport(file, user, setProgress)
+      // Get user profile for verification
+      const { doc, getDoc } = await import('firebase/firestore')
+      const { db } = await import('../firebase')
+      const userDoc = await getDoc(doc(db, 'users', user.uid))
+      const userProfile = userDoc.exists() ? userDoc.data() : null
+
+      const result = await processReport(file, userProfile, setProgress)
 
       if (result.success) {
+        const ownership = result.data.ownership
+
+        // If verification fails — show warning, pause navigation
+        if (ownership && !ownership.verified && ownership.warning) {
+          setVerificationWarning(ownership.warning)
+          setPendingResult(result)
+          setProcessing(false)
+          return
+        }
+
         toast.success('Report processed successfully!')
-        navigate('/results', { state: { reportData: result.data } })
+        navigate('/results', {
+          state: { reportData: result.data, originalFile: file }
+        })
       } else {
         toast.error(result.error || 'Could not extract data. Try a clearer image.')
       }
@@ -63,7 +87,21 @@ export default function Upload({ user }) {
     }
   }
 
-  const removeFile = () => setFile(null)
+  // User confirms it's their report despite mismatch
+  const handleProceedAnyway = () => {
+    if (pendingResult) {
+      toast.success('Report processed!')
+      navigate('/results', {
+        state: { reportData: pendingResult.data, originalFile: file }
+      })
+    }
+  }
+
+  const removeFile = () => {
+    setFile(null)
+    setVerificationWarning(null)
+    setPendingResult(null)
+  }
 
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B'
@@ -74,10 +112,11 @@ export default function Upload({ user }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
       <div className="max-w-2xl mx-auto">
+
         {/* Header */}
         <div className="text-center mb-8 pt-6">
           <h1 className="text-3xl font-bold text-gray-800">Upload Lab Report</h1>
-          <p className="text-gray-500 mt-2">Upload your medical report and we'll extract the key health parameters</p>
+          <p className="text-gray-500 mt-2">Upload your medical report to extract key health parameters</p>
         </div>
 
         {/* Privacy Notice */}
@@ -86,10 +125,40 @@ export default function Upload({ user }) {
           <div>
             <p className="text-sm font-semibold text-blue-700">🔒 Privacy Protected</p>
             <p className="text-xs text-blue-600 mt-1">
-              This system uses AI to generate health insights. Only structured numerical values are analyzed — no personal data or full reports are shared externally.
+              Only numerical health values are analyzed. No personal data or full reports are shared externally.
             </p>
           </div>
         </div>
+
+        {/* Verification Warning */}
+        {verificationWarning && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
+            <div className="flex items-start gap-3 mb-4">
+              <ShieldAlert className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-red-700 text-sm">⚠️ Report Verification Failed</p>
+                <p className="text-sm text-red-600 mt-1">{verificationWarning}</p>
+                <p className="text-xs text-red-500 mt-2">
+                  Please make sure you are uploading your own medical report.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={removeFile}
+                className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                Upload Different Report
+              </button>
+              <button
+                onClick={handleProceedAnyway}
+                className="flex-1 bg-white border border-red-200 text-red-500 font-semibold py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors"
+              >
+                It's My Report →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Upload Area */}
         {!file ? (
@@ -130,7 +199,6 @@ export default function Upload({ user }) {
             </div>
           </div>
         ) : (
-          /* File Preview */
           <div className="bg-white rounded-2xl shadow-md p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -155,7 +223,6 @@ export default function Upload({ user }) {
               )}
             </div>
 
-            {/* Image Preview */}
             {file.type !== 'application/pdf' && (
               <div className="mt-4 rounded-xl overflow-hidden border border-gray-100">
                 <img
@@ -172,20 +239,20 @@ export default function Upload({ user }) {
         {processing && (
           <div className="mt-6 bg-white rounded-2xl shadow-md p-6">
             <div className="flex items-center gap-4">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-indigo-600 flex-shrink-0"></div>
+              <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-indigo-600 flex-shrink-0" />
               <div>
                 <p className="font-semibold text-gray-800">Processing your report...</p>
                 <p className="text-sm text-indigo-600 mt-1">{progress}</p>
               </div>
             </div>
             <div className="mt-4 bg-gray-100 rounded-full h-2">
-              <div className="bg-indigo-600 h-2 rounded-full animate-pulse w-3/4"></div>
+              <div className="bg-indigo-600 h-2 rounded-full animate-pulse w-3/4" />
             </div>
           </div>
         )}
 
-        {/* Process Button */}
-        {file && !processing && (
+        {/* Analyze Button */}
+        {file && !processing && !verificationWarning && (
           <button
             onClick={handleProcess}
             className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl text-lg flex items-center justify-center gap-3"
@@ -205,18 +272,19 @@ export default function Upload({ user }) {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-500 font-bold mt-0.5">✓</span>
-              Typed/printed reports work better than handwritten ones
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 font-bold mt-0.5">✓</span>
-              Ensure good lighting if taking a photo of your report
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 font-bold mt-0.5">✓</span>
               PDF uploads give the most accurate results
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-green-500 font-bold mt-0.5">✓</span>
+              Upload only your own medical reports
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-green-500 font-bold mt-0.5">✓</span>
+              Report date will be automatically detected from the document
             </li>
           </ul>
         </div>
+
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { CheckCircle, ArrowLeft, RefreshCw, AlertCircle, Save } from 'lucide-react'
+import { CheckCircle, ArrowLeft, RefreshCw, Save, FileText, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { saveReport } from '../utils/saveReport'
 
@@ -46,6 +46,7 @@ const NORMAL_RANGES = {
   iron:          { min: 60,      max: 170,     unit: 'µg/dL',      label: 'Serum Iron' },
   esr:           { min: 0,       max: 20,      unit: 'mm/hr',      label: 'ESR' },
   crp:           { min: 0,       max: 5,       unit: 'mg/L',       label: 'CRP' },
+  antiTpo: { min: 0, max: 34, unit: 'IU/mL', label: 'Anti TPO Antibody' },
 }
 
 const getStatus = (key, value) => {
@@ -67,8 +68,14 @@ export default function Results({ user }) {
   const location = useLocation()
   const navigate = useNavigate()
   const reportData = location.state?.reportData
+  const originalFile = location.state?.originalFile || null
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Create local preview URL from file object (works before saving)
+  const localFileURL = originalFile ? URL.createObjectURL(originalFile) : null
+  const isPDF = originalFile?.type === 'application/pdf'
+  const isTooBig = originalFile && originalFile.size >= 900 * 1024
 
   if (!reportData) {
     return (
@@ -86,7 +93,7 @@ export default function Results({ user }) {
     )
   }
 
-  const { parameters, fileName } = reportData
+  const { parameters, fileName, reportDate } = reportData
   const paramKeys = Object.keys(parameters)
 
   const abnormalCount = paramKeys.filter(k => {
@@ -99,19 +106,34 @@ export default function Results({ user }) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const result = await saveReport(user.uid, reportData)
+      const result = await saveReport(user.uid, reportData, originalFile)
       if (result.success) {
         setSaved(true)
         toast.success('Report saved successfully!')
       } else {
-        toast.error('Failed to save report')
+        toast.error('Failed to save: ' + result.error)
       }
     } catch (err) {
+      console.error(err)
       toast.error('Failed to save report')
     } finally {
       setSaving(false)
     }
   }
+
+  const handleViewOriginal = () => {
+    if (localFileURL) {
+      window.open(localFileURL, '_blank')
+    } else if (reportData?.fileData) {
+      // If loaded from Firestore (saved report)
+      const link = document.createElement('a')
+      link.href = reportData.fileData
+      link.target = '_blank'
+      link.click()
+    }
+  }
+
+  const canViewOriginal = localFileURL || reportData?.fileData
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
@@ -128,6 +150,11 @@ export default function Results({ user }) {
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Report Results</h1>
             <p className="text-gray-400 text-sm truncate max-w-xs">{fileName}</p>
+            {reportDate && (
+              <p className="text-xs text-indigo-500 font-medium mt-0.5">
+                📅 Report Date: {reportDate}
+              </p>
+            )}
           </div>
         </div>
 
@@ -216,6 +243,24 @@ export default function Results({ user }) {
             <div className="flex items-center justify-center gap-2 w-full bg-green-50 border border-green-200 text-green-700 font-bold py-4 rounded-2xl">
               <CheckCircle className="w-5 h-5" />
               Report Saved!
+            </div>
+          )}
+
+          {/* View Original Report */}
+          {canViewOriginal && (
+            <button
+              onClick={handleViewOriginal}
+              className="flex items-center justify-center gap-2 w-full bg-white border border-indigo-200 text-indigo-600 font-semibold py-3 rounded-2xl hover:bg-indigo-50 transition-all"
+            >
+              <Eye className="w-5 h-5" />
+              View Original Report
+            </button>
+          )}
+
+          {/* File too large warning */}
+          {isTooBig && (
+            <div className="flex items-center justify-center gap-2 w-full bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm py-3 rounded-2xl px-4 text-center">
+              ⚠️ File is large ({(originalFile.size / 1024).toFixed(0)}KB) — preview available now but won't be saved permanently
             </div>
           )}
 
