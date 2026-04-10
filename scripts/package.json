@@ -1,0 +1,13 @@
+{
+  "name": "medilens-reminders",
+  "version": "1.0.0",
+  "description": "Daily health reminder sender for MediLens AI (runs via GitHub Actions)",
+  "type": "commonjs",
+  "main": "sendReminders.js",
+  "scripts": {
+    "start": "node sendReminders.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

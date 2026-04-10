@@ -86,12 +86,16 @@ export default function Navbar({ user, userRole }) {
 
             {/* Notification Bell */}
             {unreadCount > 0 && (
-              <div className="relative px-3 py-2">
+              <button
+                onClick={() => navigate(isDoctor ? '/doctor' : '/dashboard')}
+                className="relative px-3 py-2 hover:bg-gray-100 rounded-xl transition-colors"
+                title={`${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`}
+              >
                 <Bell className="w-4 h-4 text-gray-500" />
                 <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
                   {unreadCount}
                 </span>
-              </div>
+              </button>
             )}
 
             <button
@@ -106,12 +110,16 @@ export default function Navbar({ user, userRole }) {
           {/* Mobile */}
           <div className="md:hidden flex items-center gap-2">
             {unreadCount > 0 && (
-              <div className="relative">
+              <button
+                onClick={() => navigate(isDoctor ? '/doctor' : '/dashboard')}
+                className="relative p-1 hover:bg-gray-100 rounded-xl transition-colors"
+                title={`${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`}
+              >
                 <Bell className="w-5 h-5 text-gray-500" />
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
                   {unreadCount}
                 </span>
-              </div>
+              </button>
             )}
             <button
               className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"

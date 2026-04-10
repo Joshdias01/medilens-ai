@@ -44,6 +44,7 @@ export const saveReport = async (userId, reportData, file = null) => {
       fileType: reportData.fileType,
       parameters: reportData.parameters,
       processedAt: reportData.processedAt,
+      reportDate: reportData.reportDate || null,
       createdAt: new Date().toISOString(),
       fileData: fileData || null
     })
@@ -91,7 +92,7 @@ export const getTrendsData = (reports) => {
   const trends = {}
 
   reports.forEach(report => {
-    const date = new Date(report.processedAt).toLocaleDateString('en-IN', {
+    const displayDate = new Date(report.processedAt).toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
       year: '2-digit'
@@ -106,15 +107,17 @@ export const getTrendsData = (reports) => {
         trends[key] = { label, unit, data: [] }
       }
       trends[key].data.push({
-        date,
+        date: displayDate,
+        sortKey: report.processedAt,   // ISO string for accurate sorting
         value,
         reportId: report.id
       })
     })
   })
 
+  // Sort chronologically using the ISO sortKey
   Object.keys(trends).forEach(key => {
-    trends[key].data.sort((a, b) => new Date(a.date) - new Date(b.date))
+    trends[key].data.sort((a, b) => new Date(a.sortKey) - new Date(b.sortKey))
   })
 
   return trends

@@ -64,10 +64,13 @@ export default function ReviewDetail({ user, userRole }) {
       setLoading(false)
     }
 
-    // Mark as read
-    await updateDoc(doc(db, 'reviews', reviewId), {
-      hasUnread: false
-    }).catch(() => {})
+    // Only clear 'hasUnread' for the patient (i.e., when patient opens a completed doctor review)
+    // Don't wipe notifications when the doctor opens their own pending review
+    if (!isDoctor) {
+      await updateDoc(doc(db, 'reviews', reviewId), {
+        hasUnread: false
+      }).catch(() => {})
+    }
   }
 
   const sendMessage = async () => {

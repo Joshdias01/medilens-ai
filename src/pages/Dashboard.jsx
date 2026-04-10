@@ -7,10 +7,16 @@ import {
   Activity, Upload, TrendingUp, FileText,
   Trash2, ChevronRight, User,
   AlertTriangle, CheckCircle, ChevronDown, ChevronUp,
-  Brain, TrendingDown, Minus
+  Brain, TrendingDown, Minus, Bell, BellOff
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
+import {
+  getNotifSupport, requestNotifPermission,
+  remindersEnabled, setRemindersEnabled,
+  shouldSendToday, fireDailyReminders,
+  fireHealthReminder, getAbnormalForReminder, getTodaysTip
+} from '../utils/healthReminders'
 
 const NORMAL_RANGES = {
   hemoglobin:    { min: 12,      max: 17,      unit: 'g/dL',       label: 'Hemoglobin' },
@@ -273,6 +279,7 @@ const getReportStatus = (parameters) => {
 }
 function DoctorReviewsSection({ user }) {
   const [reviews, setReviews] = useState([])
+  const [loadingReviews, setLoadingReviews] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -285,10 +292,12 @@ function DoctorReviewsSection({ user }) {
         .map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       setReviews(data)
+      setLoadingReviews(false)
     })
     return () => unsub()
   }, [user.uid])
 
+  if (loadingReviews) return null
   if (reviews.length === 0) return null
 
   return (
@@ -348,6 +357,10 @@ export default function Dashboard({ user }) {
   const [deleting, setDeleting] = useState(null)
   const [showAllParams, setShowAllParams] = useState(false)
   const [showInsights, setShowInsights] = useState(false)
+
+  // ── Reminder state ────────────────────────────────────────────────────────
+  const [notifPermission, setNotifPermission] = useState(getNotifSupport())
+  const [remEnabled, setRemEnabled] = useState(remindersEnabled())
   const navigate = useNavigate()
 
   useEffect(() => { loadData() }, [user.uid])
@@ -357,9 +370,19 @@ export default function Dashboard({ user }) {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid))
       if (userDoc.exists()) setUserProfile(userDoc.data())
-      const { getUserReports } = await import('../utils/saveReport')
       const userReports = await getUserReports(user.uid)
       setReports(userReports)
+
+      // Auto-fire daily reminder if it's a new day and reminders are enabled
+      if (
+        userReports.length > 0 &&
+        remindersEnabled() &&
+        shouldSendToday() &&
+        getNotifSupport() === 'granted'
+      ) {
+        const count = fireDailyReminders(userReports[0].parameters)
+        if (count > 0) toast('🔔 Health reminders sent!', { icon: '' })
+      }
     } catch (error) {
       toast.error('Failed to load data')
     } finally {
@@ -367,11 +390,44 @@ export default function Dashboard({ user }) {
     }
   }
 
+  // Enable reminders: ask permission then activate
+  const handleEnableReminders = async () => {
+    const perm = await requestNotifPermission(user.uid)
+    setNotifPermission(perm)
+    if (perm === 'granted') {
+      setRemindersEnabled(true)
+      setRemEnabled(true)
+      toast.success('Daily health reminders enabled! 🔔')
+    } else if (perm === 'denied') {
+      toast.error('Notifications blocked. Enable them in your browser settings.')
+    }
+  }
+
+  // Disable reminders
+  const handleDisableReminders = () => {
+    setRemindersEnabled(false)
+    setRemEnabled(false)
+    toast('Daily reminders turned off.', { icon: '🔕' })
+  }
+
+  // Fire a test notification immediately
+  const handleTestReminder = () => {
+    const latestRep = reports[0]
+    if (!latestRep) { toast.error('Upload a report first to test reminders.'); return }
+    const abnormal = getAbnormalForReminder(latestRep.parameters)
+    if (abnormal.length === 0) {
+      toast('All your parameters look normal. Great job! ✅')
+      return
+    }
+    const fired = fireHealthReminder(abnormal[0], false)
+    if (fired) toast.success('Test reminder sent! Check your notifications. 🔔')
+    else toast.error('Could not send — make sure notifications are enabled.')
+  }
+
   const handleDelete = async (reportId, e) => {
     e.stopPropagation()
     if (!confirm('Delete this report?')) return
     setDeleting(reportId)
-    const { deleteReport } = await import('../utils/saveReport')
     const result = await deleteReport(reportId)
     if (result.success) {
       setReports(reports.filter(r => r.id !== reportId))
@@ -480,6 +536,117 @@ export default function Dashboard({ user }) {
 
 {/* My Doctor Reviews */}
 <DoctorReviewsSection user={user} />
+
+        {/* ── Daily Health Reminders Card ───────────────────────────────── */}
+        {reports.length > 0 && (() => {
+          const latestRep = reports[0]
+          const abnormal = getAbnormalForReminder(latestRep.parameters)
+          const previewParam = abnormal[0] || null
+          const previewTip = previewParam ? getTodaysTip(previewParam.key) : null
+
+          return (
+            <div className="bg-white rounded-2xl shadow-sm mb-6 overflow-hidden border border-amber-100">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                    <Bell className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-800">Daily Health Reminders</p>
+                    <p className="text-xs text-gray-400">
+                      {remEnabled && notifPermission === 'granted'
+                        ? `${abnormal.length > 0 ? abnormal.length + ' active reminder' + (abnormal.length > 1 ? 's' : '') : 'All parameters normal 🎉'}`
+                        : 'Get daily tips based on your health data'}
+                    </p>
+                  </div>
+                </div>
+                {/* Toggle */}
+                {notifPermission === 'granted' && (
+                  <button
+                    onClick={remEnabled ? handleDisableReminders : handleEnableReminders}
+                    className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${
+                      remEnabled ? 'bg-amber-400' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`absolute w-5 h-5 bg-white rounded-full shadow top-0.5 transition-all duration-300 ${
+                      remEnabled ? 'left-6' : 'left-0.5'
+                    }`} />
+                  </button>
+                )}
+              </div>
+
+              {/* Body */}
+              <div className="px-5 pb-5">
+                {notifPermission === 'unsupported' ? (
+                  <p className="text-xs text-gray-400 text-center py-2">
+                    Your browser does not support push notifications.
+                  </p>
+
+                ) : notifPermission === 'denied' ? (
+                  <div className="bg-red-50 rounded-xl p-3 text-xs text-red-600">
+                    🚫 Notifications are blocked. Go to your browser settings → Site settings → Notifications → Allow for this site.
+                  </div>
+
+                ) : notifPermission !== 'granted' ? (
+                  // Permission not yet asked
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500">
+                      Enable OS-level daily reminders based on your abnormal health parameters.
+                      Each day you'll get a personalized tip to help improve your results.
+                    </p>
+                    <button
+                      onClick={handleEnableReminders}
+                      className="w-full bg-amber-400 hover:bg-amber-500 text-white font-semibold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <Bell className="w-4 h-4" />
+                      Enable Daily Health Reminders
+                    </button>
+                  </div>
+
+                ) : (
+                  // Granted — show preview + test button
+                  <div className="space-y-3">
+                    {/* Today's reminder preview */}
+                    {previewParam && remEnabled ? (
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                        <p className="text-xs font-bold text-amber-700 mb-1">
+                          🔔 Today's Reminder Preview
+                        </p>
+                        <p className="text-xs font-semibold text-gray-700">
+                          {previewParam.label} is {previewParam.type === 'high' ? '⬆ High' : '⬇ Low'}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">💡 {previewTip}</p>
+                      </div>
+                    ) : remEnabled ? (
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700">
+                          ✅ All parameters in your latest report are within normal range. No reminders needed today!
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 text-center">Reminders are currently off. Toggle to re-enable.</p>
+                    )}
+
+                    {/* Test button — great for demo */}
+                    <button
+                      onClick={handleTestReminder}
+                      className="w-full border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-2"
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                      Send Test Reminder Now
+                    </button>
+
+                    <p className="text-xs text-gray-400 text-center">
+                      Reminders auto-fire once daily when you open the app.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
 
         {/* Health Insights */}
         {insights.length > 0 && (

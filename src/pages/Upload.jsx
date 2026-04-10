@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useNavigate } from 'react-router-dom'
 import { Upload as UploadIcon, FileText, Image, X, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react'
@@ -12,7 +12,19 @@ export default function Upload({ user }) {
   const [progress, setProgress] = useState('')
   const [verificationWarning, setVerificationWarning] = useState(null)
   const [pendingResult, setPendingResult] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
   const navigate = useNavigate()
+
+  // Create/revoke preview URL to prevent memory leaks
+  useEffect(() => {
+    if (file && file.type !== 'application/pdf') {
+      const url = URL.createObjectURL(file)
+      setPreviewUrl(url)
+      return () => URL.revokeObjectURL(url)
+    } else {
+      setPreviewUrl(null)
+    }
+  }, [file])
 
   const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
     if (rejectedFiles.length > 0) {
@@ -257,10 +269,10 @@ export default function Upload({ user }) {
             </div>
 
             {/* Image preview */}
-            {file.type !== 'application/pdf' && (
+            {previewUrl && (
               <div className="mt-4 rounded-xl overflow-hidden border border-gray-100">
                 <img
-                  src={URL.createObjectURL(file)}
+                  src={previewUrl}
                   alt="Preview"
                   className="w-full max-h-44 object-contain bg-gray-50"
                 />

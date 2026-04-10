@@ -18,7 +18,7 @@ export default function Login() {
     try {
       await signInWithEmailAndPassword(auth, email, password)
       toast.success('Welcome back! 👋')
-      navigate('/dashboard')
+      navigate('/')
     } catch (error) {
       toast.error('Invalid email or password')
     } finally {

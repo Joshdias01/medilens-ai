@@ -1,0 +1,36 @@
+name: 🔔 Daily Health Reminders
+
+on:
+  # Runs at 9:00 AM IST = 3:30 AM UTC every day
+  schedule:
+    - cron: '30 3 * * *'
+
+  # Allows manual trigger from the GitHub Actions UI (great for demo!)
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    name: Send Personalized Health Reminders
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scripts/package.json
+
+      - name: 📦 Install dependencies
+        run: npm install
+        working-directory: scripts
+
+      - name: 🔔 Send daily reminders
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node sendReminders.js
+        working-directory: scripts
