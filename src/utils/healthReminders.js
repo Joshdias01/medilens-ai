@@ -243,11 +243,14 @@ export const requestNotifPermission = async (userId = null) => {
   if (result === 'granted' && userId) {
     try {
       const { getOrSaveFcmToken } = await import('../firebase')
-      await getOrSaveFcmToken(userId)
-      console.log('[Reminders] FCM token registered for background push ✅')
+      const token = await getOrSaveFcmToken(userId)
+      if (token) {
+        console.log('[Reminders] FCM token registered for background push ✅')
+      } else {
+        console.warn('[Reminders] FCM token not saved — browser-only mode active (check VAPID key)')
+      }
     } catch (err) {
-      console.warn('[Reminders] FCM token registration failed (browser-only mode):', err.message)
-      // Non-critical — browser notifications still work without FCM
+      console.warn('[Reminders] FCM token registration failed:', err.message)
     }
   }
 

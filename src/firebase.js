@@ -28,18 +28,22 @@ export const getOrSaveFcmToken = async (userId) => {
     const supported = await isSupported()
     if (!supported) return null
 
+    // Register the SW (no-op if already registered)
+    navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' })
+
+    // Wait until the service worker is fully active before calling getToken()
+    // This prevents "Subscription failed - no active Service Worker" errors
+    const swReg = await navigator.serviceWorker.ready
+
     const messaging = getMessaging(app)
-
-    // Register the service worker explicitly so getToken() works on localhost
-    const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-      scope: '/'
-    })
-
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: swReg
     })
-    if (!token) return null
+    if (!token) {
+      console.warn('FCM: getToken returned empty — check VAPID key in .env')
+      return null
+    }
 
     // Save token + reminder preference to Firestore
     await updateDoc(doc(db, 'users', userId), {
