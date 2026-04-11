@@ -237,20 +237,27 @@ export const getNotifSupport = () => {
 
 export const requestNotifPermission = async (userId = null) => {
   if (!('Notification' in window)) return 'unsupported'
-  const result = await Notification.requestPermission()
 
-  // If granted, also register FCM token for GitHub Actions background pushes
+  let result
+  try {
+    result = await Notification.requestPermission()
+  } catch (err) {
+    // Some older browsers use callback style
+    result = await new Promise(resolve => Notification.requestPermission(resolve))
+  }
+
+  // If granted, register FCM token so GitHub Actions can push even when app is closed
   if (result === 'granted' && userId) {
     try {
       const { getOrSaveFcmToken } = await import('../firebase')
       const token = await getOrSaveFcmToken(userId)
       if (token) {
-        console.log('[Reminders] FCM token registered for background push ✅')
+        console.log('[Reminders] FCM token registered ✅', token.slice(0, 20) + '...')
       } else {
-        console.warn('[Reminders] FCM token not saved — browser-only mode active (check VAPID key)')
+        console.warn('[Reminders] FCM token not saved — check VITE_FIREBASE_VAPID_KEY in .env')
       }
     } catch (err) {
-      console.warn('[Reminders] FCM token registration failed:', err.message)
+      console.warn('[Reminders] FCM registration failed:', err.message)
     }
   }
 
@@ -274,8 +281,9 @@ export const markReminderSentToday = () =>
   localStorage.setItem(STORAGE_KEY_DATE, new Date().toISOString())
 
 // ─── FIRE A BROWSER NOTIFICATION ─────────────────────────────────────────────
-// Uses Service Worker showNotification() — works on BOTH desktop and mobile Chrome.
-// new Notification() works only on desktop; mobile Chrome requires the SW API.
+// IMPORTANT: new Notification() does NOT work on mobile Chrome — it silently fails.
+// We MUST use serviceWorkerRegistration.showNotification() for cross-platform support.
+// We also cannot use navigator.serviceWorker.ready blindly — it hangs if SW failed.
 export const fireHealthReminder = async (abnormalParam, isSilent = false) => {
   if (Notification.permission !== 'granted') return false
 
@@ -286,28 +294,52 @@ export const fireHealthReminder = async (abnormalParam, isSilent = false) => {
 
   const title   = `${emoji} ${label} is ${type === 'high' ? 'High' : 'Low'} ${arrow}`
   const options = {
-    body:              `Today's action: ${tip}`,
-    icon:              '/favicon.ico',
-    badge:             '/favicon.ico',
-    tag:               `medilens-${key}`,
+    body:               `Today's tip: ${tip}`,
+    icon:               '/favicon.ico',
+    badge:              '/favicon.ico',
+    tag:                `medilens-${key}`,
     requireInteraction: false,
-    silent:            isSilent,
+    silent:             isSilent,
   }
 
-  try {
-    if ('serviceWorker' in navigator) {
-      // Works on desktop + mobile Chrome
-      const reg = await navigator.serviceWorker.ready
-      await reg.showNotification(title, options)
-    } else {
-      // Fallback for browsers without service worker support
-      new Notification(title, options)
+  // Try SW-based notification first (required for mobile Chrome, also works on desktop)
+  if ('serviceWorker' in navigator) {
+    try {
+      const origin = window.location.origin
+      const regList = await navigator.serviceWorker.getRegistrations()
+      // Find an active registration that covers our origin
+      const reg = regList.find(r => r.active && r.scope.includes(origin)) ||
+                  regList.find(r => r.active) ||
+                  regList[0]
+
+      if (reg && reg.active) {
+        await reg.showNotification(title, options)
+        return true
+      }
+
+      // If no active SW yet, try waiting for one (with timeout)
+      const swReg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SW timeout')), 4000))
+      ])
+      await swReg.showNotification(title, options)
+      return true
+    } catch (swErr) {
+      console.warn('[Notif] SW showNotification failed:', swErr.message)
     }
-    return true
-  } catch (err) {
-    console.warn('Notification show error:', err)
-    return false
   }
+
+  // Desktop-only fallback (not supported on mobile Chrome)
+  try {
+    if (typeof Notification !== 'undefined') {
+      new Notification(title, options)
+      return true
+    }
+  } catch (fallbackErr) {
+    console.warn('[Notif] Fallback Notification failed:', fallbackErr.message)
+  }
+
+  return false
 }
 
 // ─── FIRE ALL REMINDERS (up to 3 most critical) ───────────────────────────────

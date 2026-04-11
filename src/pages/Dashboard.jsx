@@ -361,6 +361,7 @@ export default function Dashboard({ user }) {
   // ── Reminder state ────────────────────────────────────────────────────────
   const [notifPermission, setNotifPermission] = useState(getNotifSupport())
   const [remEnabled, setRemEnabled] = useState(remindersEnabled())
+  const [fcmRegistering, setFcmRegistering] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => { loadData() }, [user.uid])
@@ -380,8 +381,9 @@ export default function Dashboard({ user }) {
         shouldSendToday() &&
         getNotifSupport() === 'granted'
       ) {
-        const count = fireDailyReminders(userReports[0].parameters)
-        if (count > 0) toast('🔔 Health reminders sent!', { icon: '' })
+        // fireDailyReminders is async — must be awaited
+        const count = await fireDailyReminders(userReports[0].parameters)
+        if (count > 0) toast('🔔 Daily health reminders sent!', { icon: '' })
       }
     } catch (error) {
       toast.error('Failed to load data')
@@ -390,16 +392,25 @@ export default function Dashboard({ user }) {
     }
   }
 
-  // Enable reminders: ask permission then activate
+  // Enable reminders: ask permission then register FCM token
   const handleEnableReminders = async () => {
-    const perm = await requestNotifPermission(user.uid)
-    setNotifPermission(perm)
-    if (perm === 'granted') {
-      setRemindersEnabled(true)
-      setRemEnabled(true)
-      toast.success('Daily health reminders enabled! 🔔')
-    } else if (perm === 'denied') {
-      toast.error('Notifications blocked. Enable them in your browser settings.')
+    setFcmRegistering(true)
+    try {
+      const perm = await requestNotifPermission(user.uid)
+      setNotifPermission(perm)
+      if (perm === 'granted') {
+        setRemindersEnabled(true)
+        setRemEnabled(true)
+        toast.success('Daily health reminders enabled! 🔔')
+      } else if (perm === 'denied') {
+        toast.error('Notifications are blocked. Go to browser Settings → Site Settings → Notifications → Allow.')
+      } else {
+        toast('Permission not granted. Please allow notifications when the browser prompts.', { icon: '⚠️' })
+      }
+    } catch (err) {
+      toast.error('Could not enable notifications. Try again.')
+    } finally {
+      setFcmRegistering(false)
     }
   }
 
@@ -416,12 +427,21 @@ export default function Dashboard({ user }) {
     if (!latestRep) { toast.error('Upload a report first to test reminders.'); return }
     const abnormal = getAbnormalForReminder(latestRep.parameters)
     if (abnormal.length === 0) {
-      toast('All your parameters look normal. Great job! ✅')
+      // All normal — fire a generic test notification
+      const fired = await fireHealthReminder(
+        { key: 'hemoglobin', label: 'Health Tip', type: 'low' },
+        false
+      )
+      if (fired) toast.success('Test notification sent! 🔔 Check your notifications.')
+      else toast('✅ All your parameters look normal. Great job!')
       return
     }
     const fired = await fireHealthReminder(abnormal[0], false)
-    if (fired) toast.success('Test reminder sent! Check your notifications. 🔔')
-    else toast.error('Could not send — make sure notifications are enabled.')
+    if (fired) {
+      toast.success('Test notification sent! 🔔')
+    } else {
+      toast.error('❌ Could not send notification. Please check:\n1. Notifications are allowed\n2. You\'re using Chrome/Edge\n3. Try refreshing the page')
+    }
   }
 
   const handleDelete = async (reportId, e) => {
@@ -584,23 +604,29 @@ export default function Dashboard({ user }) {
                   </p>
 
                 ) : notifPermission === 'denied' ? (
-                  <div className="bg-red-50 rounded-xl p-3 text-xs text-red-600">
-                    🚫 Notifications are blocked. Go to your browser settings → Site settings → Notifications → Allow for this site.
+                  <div className="bg-red-50 rounded-xl p-3.5 text-xs text-red-700 space-y-1">
+                    <p className="font-bold">🚫 Notifications Blocked</p>
+                    <p>To fix this on <strong>Chrome desktop</strong>: Click the 🔒 lock icon in the address bar → Notifications → Allow.</p>
+                    <p>On <strong>Android Chrome</strong>: Settings → Site Settings → Notifications → find this site → Allow.</p>
                   </div>
 
                 ) : notifPermission !== 'granted' ? (
                   // Permission not yet asked
                   <div className="space-y-3">
                     <p className="text-xs text-gray-500">
-                      Enable OS-level daily reminders based on your abnormal health parameters.
+                      Enable daily reminders based on your abnormal health parameters.
                       Each day you'll get a personalized tip to help improve your results.
                     </p>
                     <button
                       onClick={handleEnableReminders}
-                      className="w-full bg-amber-400 hover:bg-amber-500 text-white font-semibold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm"
+                      disabled={fcmRegistering}
+                      className="w-full bg-amber-400 hover:bg-amber-500 text-white font-semibold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-70"
                     >
-                      <Bell className="w-4 h-4" />
-                      Enable Daily Health Reminders
+                      {fcmRegistering
+                        ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                        : <Bell className="w-4 h-4" />
+                      }
+                      {fcmRegistering ? 'Registering...' : 'Enable Daily Health Reminders'}
                     </button>
                   </div>
 
@@ -786,9 +812,7 @@ export default function Dashboard({ user }) {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-800 text-sm truncate">{report.fileName}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {report.reportDate || new Date(report.createdAt).toLocaleDateString('en-IN', {
-  day: '2-digit', month: 'short', year: 'numeric'
-})}
+                        {report.reportDate || new Date(report.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
@@ -801,15 +825,15 @@ export default function Dashboard({ user }) {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         onClick={(e) => handleDelete(report.id, e)}
-                        className="p-2 hover:bg-red-50 rounded-xl transition-colors"
+                        className="p-2 hover:bg-red-50 rounded-xl transition-colors group"
                         disabled={deleting === report.id}
                       >
                         {deleting === report.id
                           ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-400" />
-                          : <Trash2 className="w-4 h-4 text-red-400" />
+                          : <Trash2 className="w-4 h-4 text-gray-300 group-hover:text-red-400 transition-colors" />
                         }
                       </button>
                       <ChevronRight className="w-4 h-4 text-gray-300" />
