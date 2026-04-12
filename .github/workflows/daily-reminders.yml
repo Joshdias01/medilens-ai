@@ -2,8 +2,8 @@ name: 🔔 Daily Health Reminders
 
 on:
   # Runs at 9:00 AM IST = 3:30 AM UTC every day
-  schedule:
-    - cron: '30 3 * * *'
+#  schedule:
+#    - cron: '30 3 * * *'
 
   # Allows manual trigger from the GitHub Actions UI (great for demo!)
   workflow_dispatch:

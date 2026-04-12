@@ -4,12 +4,12 @@ import { getFirestore, doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { getMessaging, getToken, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBrw5PB8aQCWwQ6k023X71cp3AKLH5jUVM",
-  authDomain: "medilens-ai-c5afc.firebaseapp.com",
-  projectId: "medilens-ai-c5afc",
-  storageBucket: "medilens-ai-c5afc.firebasestorage.app",
-  messagingSenderId: "681571207260",
-  appId: "1:681571207260:web:0416f047cb3c368543fe99"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
